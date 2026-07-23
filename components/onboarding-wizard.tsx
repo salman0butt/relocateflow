@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,20 +19,12 @@ import {
   Plane,
   ShieldCheck,
   Sparkles,
+  UserRound,
   Users,
   WalletCards,
 } from "lucide-react";
+import { defaultProfile, type RelocationProfile } from "@/lib/workspace";
 import { Logo } from "./logo";
-
-type Answers = {
-  destination: string;
-  profession: string;
-  experience: string;
-  moveType: string;
-  priorities: string[];
-  budget: string;
-  timeline: string;
-};
 
 const destinationOptions = [
   { value: "Germany", city: "Berlin", flag: "🇩🇪", note: "Strong tech market · EU Blue Card" },
@@ -50,21 +42,30 @@ const priorities = [
   { value: "English-friendly", icon: Languages },
 ];
 
+const emptySubscribe = () => () => undefined;
+
+function readSavedProfile() {
+  if (typeof window === "undefined") return defaultProfile;
+  try {
+    const stored = window.localStorage.getItem("relocateflow-profile");
+    return stored ? { ...defaultProfile, ...(JSON.parse(stored) as Partial<RelocationProfile>) } : defaultProfile;
+  } catch {
+    return defaultProfile;
+  }
+}
+
 export function OnboardingWizard() {
   const router = useRouter();
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<Answers>({
-    destination: "Germany",
-    profession: "Senior Frontend Engineer",
-    experience: "6–10 years",
-    moveType: "Just me",
-    priorities: ["Career growth", "Safety", "English-friendly"],
-    budget: "€8,000–€12,000",
-    timeline: "3–6 months",
-  });
+  const [answers, setAnswers] = useState<RelocationProfile>(readSavedProfile);
 
   const completion = ((step + 1) / 5) * 100;
   const selectedDestination = useMemo(() => destinationOptions.find((item) => item.value === answers.destination), [answers.destination]);
+
+  const saveProfile = () => {
+    window.localStorage.setItem("relocateflow-profile", JSON.stringify(answers));
+  };
 
   const togglePriority = (priority: string) => {
     setAnswers((current) => ({
@@ -76,13 +77,21 @@ export function OnboardingWizard() {
   };
 
   const continueFlow = () => {
+    saveProfile();
     if (step < 4) {
       setStep((current) => current + 1);
       return;
     }
-    window.localStorage.setItem("relocateflow-profile", JSON.stringify(answers));
+    window.localStorage.removeItem("relocateflow-tasks");
     router.push("/dashboard");
   };
+
+  const saveAndExit = () => {
+    saveProfile();
+    router.push("/");
+  };
+
+  if (!mounted) return <main className="onboarding-shell onboarding-loading" aria-busy="true" />;
 
   return (
     <main className="onboarding-shell">
@@ -92,7 +101,7 @@ export function OnboardingWizard() {
           <span>Step {step + 1} of 5</span>
           <div className="onboarding-progress"><i style={{ width: `${completion}%` }} /></div>
         </div>
-        <button className="save-exit" onClick={() => router.push("/")}>Save & exit</button>
+        <button className="save-exit" onClick={saveAndExit}>Save & exit</button>
       </header>
 
       <div className="onboarding-layout">
@@ -113,8 +122,10 @@ export function OnboardingWizard() {
                 <div className="question-icon"><BriefcaseBusiness /></div>
                 <span className="question-kicker">Your professional profile</span>
                 <h1>What expertise are you<br />bringing with you?</h1>
-                <p>This helps us shape your visa pathway, salary expectations and best-fit cities.</p>
-                <div className="form-stack">
+                <p>Your details personalize the workspace, visa pathway, salary expectations, and city matches.</p>
+                <div className="form-stack profile-form-grid">
+                  <label>Your name<div className="input-wrap"><UserRound size={19} /><input value={answers.name} onChange={(event) => setAnswers({ ...answers, name: event.target.value })} placeholder="Alex Morgan" /></div></label>
+                  <label>Current city<div className="input-wrap"><MapPin size={19} /><input value={answers.currentCity} onChange={(event) => setAnswers({ ...answers, currentCity: event.target.value })} placeholder="Lahore" /></div></label>
                   <label>Current or target role<div className="input-wrap"><BriefcaseBusiness size={19} /><input value={answers.profession} onChange={(event) => setAnswers({ ...answers, profession: event.target.value })} /></div></label>
                   <label>Years of professional experience<div className="input-wrap"><Clock3 size={19} /><select value={answers.experience} onChange={(event) => setAnswers({ ...answers, experience: event.target.value })}><option>0–2 years</option><option>3–5 years</option><option>6–10 years</option><option>10+ years</option></select><ChevronDown size={18} /></div></label>
                 </div>
@@ -127,7 +138,7 @@ export function OnboardingWizard() {
                 <div className="question-icon"><Users /></div>
                 <span className="question-kicker">Your moving setup</span>
                 <h1>Who is making this<br />move with you?</h1>
-                <p>We will include the right housing, insurance, schooling and document steps.</p>
+                <p>We will include the right housing, insurance, schooling, and document steps.</p>
                 <div className="large-choice-grid">
                   {[{ value: "Just me", icon: Plane, note: "A focused plan for one" }, { value: "With my partner", icon: HeartHandshake, note: "A shared relocation plan" }, { value: "With family", icon: Users, note: "Including children or dependants" }].map(({ value, icon: Icon, note }) => <button key={value} className={answers.moveType === value ? "large-choice selected" : "large-choice"} onClick={() => setAnswers({ ...answers, moveType: value })}><span><Icon /></span><strong>{value}</strong><small>{note}</small>{answers.moveType === value && <b><Check size={13} /></b>}</button>)}
                 </div>
@@ -139,7 +150,7 @@ export function OnboardingWizard() {
                 <div className="question-icon"><Sparkles /></div>
                 <span className="question-kicker">What matters most</span>
                 <h1>What would make this move<br />feel right for you?</h1>
-                <p>Select up to four priorities. We will use these to calculate your destination match.</p>
+                <p>Select up to four priorities. We use them to calculate your destination matches.</p>
                 <div className="priority-grid">{priorities.map(({ value, icon: Icon }) => <button key={value} className={answers.priorities.includes(value) ? "priority-option selected" : "priority-option"} onClick={() => togglePriority(value)}><Icon /><span>{value}</span><span className="check-square">{answers.priorities.includes(value) && <Check size={13} />}</span></button>)}</div>
                 <span className="selection-count">{answers.priorities.length} of 4 selected</span>
               </>
@@ -150,19 +161,19 @@ export function OnboardingWizard() {
                 <div className="question-icon"><CalendarDays /></div>
                 <span className="question-kicker">Budget and timing</span>
                 <h1>Let’s make your plan<br />realistic from day one.</h1>
-                <p>Rough estimates are perfect. You will be able to adjust both later.</p>
+                <p>Rough estimates are perfect. You will be able to adjust both in the workspace.</p>
                 <div className="form-stack two-column">
                   <label>Relocation budget<div className="input-wrap"><CircleDollarSign size={19} /><select value={answers.budget} onChange={(event) => setAnswers({ ...answers, budget: event.target.value })}><option>Under €5,000</option><option>€5,000–€8,000</option><option>€8,000–€12,000</option><option>€12,000+</option></select><ChevronDown size={18} /></div></label>
                   <label>Ideal move timeline<div className="input-wrap"><CalendarDays size={19} /><select value={answers.timeline} onChange={(event) => setAnswers({ ...answers, timeline: event.target.value })}><option>Within 3 months</option><option>3–6 months</option><option>6–12 months</option><option>Just exploring</option></select><ChevronDown size={18} /></div></label>
                 </div>
-                <div className="ready-card"><div className="ready-orbit"><Check /></div><div><strong>Your first roadmap is ready to generate</strong><p>We found a strong initial match for {selectedDestination?.city}, with a plan shaped around {answers.priorities.slice(0, 2).join(" and ").toLowerCase()}.</p></div></div>
+                <div className="ready-card"><div className="ready-orbit"><Check /></div><div><strong>Your personalized workspace is ready</strong><p>We found a strong initial match for {selectedDestination?.city}, shaped around {answers.priorities.slice(0, 2).join(" and ").toLowerCase()}.</p></div></div>
               </>
             )}
           </div>
 
           <div className="wizard-actions">
             <button className="button-back" onClick={() => step === 0 ? router.push("/") : setStep((current) => current - 1)}><ArrowLeft size={18} /> Back</button>
-            <button className="button button-primary" onClick={continueFlow}>{step === 4 ? "Generate my roadmap" : "Continue"} <ArrowRight size={18} /></button>
+            <button className="button button-primary" onClick={continueFlow}>{step === 4 ? "Generate my workspace" : "Continue"} <ArrowRight size={18} /></button>
           </div>
         </section>
 
@@ -170,17 +181,18 @@ export function OnboardingWizard() {
           <div className="preview-map-glow" />
           <div className="plan-preview-top"><span className="live-pill"><i /> YOUR PLAN, TAKING SHAPE</span><span>{Math.round(completion)}%</span></div>
           <div className="route-visual">
-            <div className="route-point origin"><span>PK</span><small>Current home</small><strong>Pakistan</strong></div>
+            <div className="route-point origin"><span>PK</span><small>Current home</small><strong>{answers.currentCity || "Your city"}</strong></div>
             <div className="flight-path"><i /><Plane size={20} /></div>
             <div className="route-point destination"><span>{selectedDestination?.flag}</span><small>Destination</small><strong>{selectedDestination?.city}</strong></div>
           </div>
           <div className="preview-summary-card">
+            <div><span><UserRound /></span><p>Profile<strong>{answers.name || "Your name"}</strong></p></div>
             <div><span><MapPin /></span><p>Destination<strong>{selectedDestination?.city}, {answers.destination}</strong></p></div>
             <div><span><BriefcaseBusiness /></span><p>Professional profile<strong>{answers.profession || "Not added yet"}</strong></p></div>
             <div><span><Users /></span><p>Moving setup<strong>{answers.moveType}</strong></p></div>
             <div><span><CalendarDays /></span><p>Target timeline<strong>{answers.timeline}</strong></p></div>
           </div>
-          <div className="personalization-note"><Sparkles /><p><strong>Personalization active</strong>Your choices are shaping visa, city, budget and timeline recommendations in real time.</p></div>
+          <div className="personalization-note"><Sparkles /><p><strong>Personalization active</strong>Your choices shape visa, city, budget, task, and timeline recommendations in real time.</p></div>
           <div className="secure-note"><ShieldCheck size={16} /> Your information stays private and is only stored in this browser demo.</div>
         </aside>
       </div>
