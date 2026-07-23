@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -42,19 +42,23 @@ const priorities = [
   { value: "English-friendly", icon: Languages },
 ];
 
+const emptySubscribe = () => () => undefined;
+
+function readSavedProfile() {
+  if (typeof window === "undefined") return defaultProfile;
+  try {
+    const stored = window.localStorage.getItem("relocateflow-profile");
+    return stored ? { ...defaultProfile, ...(JSON.parse(stored) as Partial<RelocationProfile>) } : defaultProfile;
+  } catch {
+    return defaultProfile;
+  }
+}
+
 export function OnboardingWizard() {
   const router = useRouter();
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<RelocationProfile>(defaultProfile);
-
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem("relocateflow-profile");
-      if (stored) setAnswers({ ...defaultProfile, ...(JSON.parse(stored) as Partial<RelocationProfile>) });
-    } catch {
-      setAnswers(defaultProfile);
-    }
-  }, []);
+  const [answers, setAnswers] = useState<RelocationProfile>(readSavedProfile);
 
   const completion = ((step + 1) / 5) * 100;
   const selectedDestination = useMemo(() => destinationOptions.find((item) => item.value === answers.destination), [answers.destination]);
@@ -86,6 +90,8 @@ export function OnboardingWizard() {
     saveProfile();
     router.push("/");
   };
+
+  if (!mounted) return <main className="onboarding-shell onboarding-loading" aria-busy="true" />;
 
   return (
     <main className="onboarding-shell">
