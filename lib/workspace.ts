@@ -99,9 +99,9 @@ export function initials(name: string) {
 }
 
 export function budgetLimit(profile: RelocationProfile) {
-  if (profile.budget.includes("12,000+")) return 15000;
-  if (profile.budget.includes("8,000")) return 10000;
-  if (profile.budget.includes("5,000–€8,000")) return 7000;
+  if (profile.budget === "€12,000+") return 15000;
+  if (profile.budget === "€8,000–€12,000") return 10000;
+  if (profile.budget === "€5,000–€8,000") return 7000;
   return 5000;
 }
 
